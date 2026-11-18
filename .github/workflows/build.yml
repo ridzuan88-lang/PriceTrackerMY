@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +21,7 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle assembleDebug --no-daemon --stacktrace -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} 2>&1 | tee build.log
       - name: Show errors
         if: failure()
         run: |
@@ -36,3 +38,10 @@ jobs:
         with:
           name: PriceTrackerMY-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish release (used by in-app updates)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk PriceTrackerMY.apk
+          gh release create "v${{ github.run_number }}" PriceTrackerMY.apk --title "PriceTracker MY 1.0.${{ github.run_number }}" --notes "Build ${{ github.run_number }}" --latest
