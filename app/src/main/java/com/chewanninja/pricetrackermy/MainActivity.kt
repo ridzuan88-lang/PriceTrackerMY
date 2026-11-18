@@ -9,10 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -35,29 +32,31 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
-        setContent { MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF1B7F5C))) { Root(vm) } }
+        setContent {
+            MaterialTheme(colorScheme = lightColorScheme(
+                primary = Brand, onPrimary = Color.White, primaryContainer = Color(0xFFD6F0E5),
+                background = Bg, surface = Color.White, surfaceVariant = Color(0xFFEAF0EC))) { Root(vm) }
+        }
     }
 }
 
-private fun icon(s: Screen): ImageVector = when (s) {
+fun icon(s: Screen): ImageVector = when (s) {
     Screen.Dashboard -> Icons.Default.Home; Screen.Scan -> Icons.Default.Add; Screen.Expenses -> Icons.Default.List
     Screen.Prices -> Icons.Default.Search; Screen.Shopping -> Icons.Default.ShoppingCart
-    Screen.Reports -> Icons.Default.DateRange; Screen.Settings -> Icons.Default.Settings
+    Screen.Reports -> Icons.Default.DateRange; Screen.Settings -> Icons.Default.Settings; Screen.More -> Icons.Default.Menu
 }
 
 @Composable fun Root(vm: AppVM) {
     val d = vm.draft
     BackHandler(enabled = d != null) { vm.draft = null }
-    Scaffold(bottomBar = {
-        if (d == null) Surface(tonalElevation = 3.dp) {
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                Screen.values().forEach { s ->
-                    val sel = vm.screen == s
-                    Column(Modifier.width(84.dp).clickable { vm.screen = s; vm.openList = null }.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(icon(s), s.label, tint = if (sel) MaterialTheme.colorScheme.primary else Color.Gray)
-                        Text(s.label, fontSize = 11.sp, color = if (sel) MaterialTheme.colorScheme.primary else Color.Gray)
-                    }
-                }
+    BackHandler(enabled = d == null && vm.openList == null && vm.screen in setOf(Screen.Shopping, Screen.Reports, Screen.Settings)) { vm.screen = Screen.More }
+    val tabs = listOf(Screen.Dashboard, Screen.Expenses, Screen.Scan, Screen.Prices, Screen.More)
+    Scaffold(containerColor = Bg, bottomBar = {
+        if (d == null) NavigationBar(containerColor = Color.White) {
+            tabs.forEach { s ->
+                val sel = vm.screen == s || (s == Screen.More && vm.screen in setOf(Screen.Shopping, Screen.Reports, Screen.Settings))
+                NavigationBarItem(selected = sel, onClick = { vm.screen = s; vm.openList = null },
+                    icon = { Icon(icon(s), s.label) }, label = { Text(s.label, fontSize = 11.sp) })
             }
         }
     }) { pad ->
@@ -65,7 +64,7 @@ private fun icon(s: Screen): ImageVector = when (s) {
             if (d != null) ReviewScreen(vm, d) else when (vm.screen) {
                 Screen.Dashboard -> DashboardScreen(vm); Screen.Scan -> ScanScreen(vm); Screen.Expenses -> ExpensesScreen(vm)
                 Screen.Prices -> PricesScreen(vm); Screen.Shopping -> ShoppingScreen(vm); Screen.Reports -> ReportsScreen(vm)
-                Screen.Settings -> SettingsScreen(vm)
+                Screen.Settings -> SettingsScreen(vm); Screen.More -> MoreScreen(vm)
             }
         }
     }

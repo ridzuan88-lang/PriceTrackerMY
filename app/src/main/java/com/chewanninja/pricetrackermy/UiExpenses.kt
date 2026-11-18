@@ -9,7 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.chewanninja.pricetrackermy.data.ExpenseEntity
 import java.time.LocalDate
@@ -49,7 +51,7 @@ import java.util.UUID
                 listOf("Daily", "Weekly", "Monthly", "Yearly").forEachIndexed { i, n -> FilterChip(mode == i, { mode = i }, { Text(n) }) }
             }
         }
-        item { BarChart(labels, vals) }
+        item { Panel { BarChart(labels, vals, Modifier.fillMaxWidth().height(150.dp)) } }
         item {
             val diff = cur - prev
             Text("This $noun ${rm(cur)} vs previous $noun ${rm(prev)}: " + (if (prev > 0) "${if (diff >= 0) "+" else "-"}${rm(kotlin.math.abs(diff))} (${Math.round(diff / prev * 100)}%)" else "no earlier data to compare"), fontWeight = FontWeight.Bold)
@@ -60,12 +62,19 @@ import java.util.UUID
                 Text("Highest: ${rm(inRange.maxOf { it.amount })}   Lowest: ${rm(inRange.minOf { it.amount })}")
             }
         }
-        item { Section("By category (this $noun)") }
-        val tot = cs.values.sum().coerceAtLeast(0.01)
-        items(cs.entries.sortedByDescending { it.value }.size) { i ->
-            val e = cs.entries.sortedByDescending { it.value }[i]
-            Column { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(names[e.key] ?: e.key); Text(rm(e.value)) }
-                Bar((e.value / tot).toFloat(), MaterialTheme.colorScheme.primary) }
+        item {
+            val sorted = cs.entries.sortedByDescending { it.value }
+            val colorOf = cats.associate { it.categoryId to hex(it.color) }
+            Panel {
+                Text("By category (this $noun)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (sorted.isEmpty()) Text("No spending in this $noun.", fontSize = 12.sp)
+                else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Donut(sorted.map { (colorOf[it.key] ?: Color.Gray) to it.value }, 120.dp) { Text(rm(sorted.sumOf { it.value }), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        sorted.take(6).forEach { Legend(colorOf[it.key] ?: Color.Gray, names[it.key] ?: it.key, rm(it.value)) }
+                    }
+                }
+            }
         }
         item { Section("By supermarket (this $noun)") }
         val stores = inRange.groupBy { it.storeName.ifBlank { "Unknown" } }.mapValues { e -> e.value.sumOf { it.amount } }.entries.sortedByDescending { it.value }

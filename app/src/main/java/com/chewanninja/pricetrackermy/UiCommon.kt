@@ -2,6 +2,11 @@ package com.chewanninja.pricetrackermy
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -94,5 +99,60 @@ fun hex(s: String): Color = try { Color(android.graphics.Color.parseColor(s)) } 
         val pts = values.mapIndexed { i, v -> Offset(size.width * i / (values.size - 1), (size.height - 12.dp.toPx() * 2) * (1 - ((v - mn) / span)).toFloat() + 12.dp.toPx()) }
         for (i in 0 until pts.size - 1) drawLine(col, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
         pts.forEach { drawCircle(col, 4.dp.toPx(), it) }
+    }
+}
+
+
+val Bg = Color(0xFFF4F7F5)
+val Brand = Color(0xFF1B7F5C)
+
+@Composable fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Card(modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
+    }
+}
+
+@Composable fun MiniStat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Brand) {
+    Column(modifier.background(color.copy(alpha = 0.08f), RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+        Text(label, fontSize = 10.sp, color = Color.Gray, maxLines = 1)
+        Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable fun Ring(frac: Float, color: Color, dia: Dp = 110.dp, content: @Composable () -> Unit) {
+    Box(Modifier.size(dia), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = 12.dp.toPx(); val s = Size(this.size.width - w, this.size.height - w); val tl = Offset(w / 2, w / 2)
+            drawArc(Color(0xFFE3EAE6), 0f, 360f, false, tl, s, style = Stroke(w))
+            drawArc(color, -90f, 360f * frac.coerceIn(0f, 1f), false, tl, s, style = Stroke(w, cap = StrokeCap.Round))
+        }
+        content()
+    }
+}
+
+@Composable fun Donut(parts: List<Pair<Color, Double>>, dia: Dp = 120.dp, content: @Composable () -> Unit = {}) {
+    val total = parts.sumOf { it.second }
+    Box(Modifier.size(dia), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = 20.dp.toPx(); val s = Size(this.size.width - w, this.size.height - w); val tl = Offset(w / 2, w / 2)
+            if (total <= 0.0) drawArc(Color(0xFFE3EAE6), 0f, 360f, false, tl, s, style = Stroke(w))
+            else {
+                var start = -90f
+                parts.forEach { (c, v) ->
+                    val sw = (v / total * 360).toFloat()
+                    drawArc(c, start, (sw - 1.5f).coerceAtLeast(0.5f), false, tl, s, style = Stroke(w))
+                    start += sw
+                }
+            }
+        }
+        content()
+    }
+}
+
+@Composable fun Legend(color: Color, name: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(9.dp).background(color, RoundedCornerShape(5.dp)))
+        Text(name, Modifier.weight(1f), fontSize = 12.sp, maxLines = 1)
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }

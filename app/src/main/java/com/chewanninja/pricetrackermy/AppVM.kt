@@ -17,7 +17,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
-enum class Screen(val label: String) { Dashboard("Dashboard"), Scan("Scan"), Expenses("Expenses"), Prices("Prices"), Shopping("Lists"), Reports("Reports"), Settings("Settings") }
+enum class Screen(val label: String) { Dashboard("Home"), Expenses("Expenses"), Scan("Scan"), Prices("Prices"), More("More"), Shopping("Lists"), Reports("Reports"), Settings("Settings") }
 
 class AppVM(private val app: Application) : AndroidViewModel(app) {
     private val a = app as PriceApp
