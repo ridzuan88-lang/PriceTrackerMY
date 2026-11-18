@@ -29,6 +29,8 @@ class MainActivity : ComponentActivity() {
     private val vm: AppVM by viewModels()
     private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    override fun onStart() { super.onStart(); vm.checkUpdate(false) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
@@ -68,6 +70,17 @@ private fun icon(s: Screen): ImageVector = when (s) {
         }
     }
     vm.message?.let { m -> AlertDialog(onDismissRequest = { vm.message = null }, confirmButton = { TextButton({ vm.message = null }) { Text("OK") } }, text = { Text(m) }) }
+    vm.update?.let { u ->
+        if (vm.updateProgress == null) AlertDialog(
+            onDismissRequest = { vm.dismissUpdate() }, title = { Text("Update available") },
+            text = { Text("New version: ${u.name}\nYou have: ${vm.versionText}" + (u.notes.takeIf { it.isNotBlank() }?.let { "\n\n$it" } ?: "")) },
+            confirmButton = { TextButton({ vm.installUpdate() }) { Text("Update now") } },
+            dismissButton = { TextButton({ vm.dismissUpdate() }) { Text("Later") } })
+    }
+    vm.updateProgress?.let { p ->
+        AlertDialog(onDismissRequest = {}, confirmButton = {}, title = { Text("Downloading update…") },
+            text = { LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth()) })
+    }
     if (vm.busy.isNotEmpty()) AlertDialog(onDismissRequest = {}, confirmButton = {}, text = {
         Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(16.dp)); Text(vm.busy) }
     })

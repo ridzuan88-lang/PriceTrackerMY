@@ -25,6 +25,12 @@ import java.util.UUID
     var newCat by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("App version ${vm.versionText}", Modifier.weight(1f))
+                OutlinedButton({ vm.checkUpdate(true) }) { Text("Check for updates") }
+            }
+        }
         item { Section("Google Sheets & Drive backend") }
         item {
             Field("Apps Script web app URL", url, { url = it }); Field("Access token", tok, { tok = it }, secret = true)

@@ -44,6 +44,48 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
 
     init { viewModelScope.launch(Dispatchers.IO) { repo.seed() } }
 
+    // ---------- in-app updates (GitHub Releases) ----------
+    var update by mutableStateOf<Updater.Info?>(null)
+    var updateProgress by mutableStateOf<Float?>(null)
+    private var lastCheck = 0L
+    private var dismissedCode = 0L
+    val versionText: String get() = Updater.current(app).let { "${it.second} (build ${it.first})" }
+
+    fun checkUpdate(manual: Boolean = false) {
+        if (!manual && System.currentTimeMillis() - lastCheck < 30 * 60 * 1000L) return
+        lastCheck = System.currentTimeMillis()
+        viewModelScope.launch {
+            try {
+                val latest = withContext(Dispatchers.IO) { Updater.fetchLatest() }
+                val cur = Updater.current(app).first
+                if (latest != null && latest.code > cur) {
+                    if (manual || latest.code != dismissedCode) update = latest
+                } else if (manual) {
+                    message = if (latest == null) "No published update found yet." else "You are on the latest version ($versionText)."
+                }
+            } catch (e: Exception) { if (manual) message = "Could not check for updates: ${e.message}" }
+        }
+    }
+
+    fun dismissUpdate() { update?.let { dismissedCode = it.code }; update = null }
+
+    fun installUpdate() {
+        val info = update ?: return
+        if (!Updater.canInstall(app)) {
+            Updater.openInstallPermission(app)
+            message = "Allow 'Install unknown apps' for PriceTracker MY, then come back and tap Update now again."
+            return
+        }
+        viewModelScope.launch {
+            updateProgress = 0f
+            try {
+                val f = withContext(Dispatchers.IO) { Updater.download(app, info) { p -> updateProgress = p } }
+                update = null
+                Updater.install(app, f)
+            } catch (e: Exception) { message = "Update failed: ${e.message}" } finally { updateProgress = null }
+        }
+    }
+
     // ---------- scanning ----------
     fun processUri(uri: Uri, enhanced: Boolean) {
         viewModelScope.launch {
