@@ -11,10 +11,21 @@ android {
         applicationId = "com.chewanninja.pricetrackermy"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    signingConfigs {
+        create("fixed") {
+            storeFile = rootProject.file("keystore/pricetracker.jks")
+            storePassword = "pricetracker"
+            keyAlias = "pricetracker"
+            keyPassword = "pricetracker"
+        }
+    }
+    buildTypes {
+        getByName("debug") { signingConfig = signingConfigs.getByName("fixed") }
+        release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("fixed") }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

@@ -41,6 +41,7 @@ class AppVM(private val app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf("")
     var message by mutableStateOf<String?>(null)
     var openList by mutableStateOf<String?>(null)
+    var addManual by mutableStateOf(false)
 
     init { viewModelScope.launch(Dispatchers.IO) { repo.seed() } }
 

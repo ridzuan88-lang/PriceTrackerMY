@@ -21,7 +21,6 @@ import java.time.YearMonth
     val lines = remember(rep) { Export.lines(rep, names) }
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         item {
-            Text("Monthly report", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton({ ym = ym.minusMonths(1) }) { Text("<") }; Text(ym.toString(), fontWeight = FontWeight.Bold); TextButton({ ym = ym.plusMonths(1) }) { Text(">") }
                 Spacer(Modifier.weight(1f))

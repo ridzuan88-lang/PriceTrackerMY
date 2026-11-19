@@ -1,40 +1,61 @@
 package com.chewanninja.pricetrackermy
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.chewanninja.pricetrackermy.data.CategoryEntity
 import com.chewanninja.pricetrackermy.data.ExpenseEntity
 import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 import java.util.UUID
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+@Composable fun ExpenseRow(e: ExpenseEntity, cats: List<CategoryEntity>, thumb: String?, subtitle: String, onClick: () -> Unit) {
+    val c = cats.firstOrNull { it.categoryId == e.categoryId }
+    Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        IconTile(catEmoji(e.categoryId), hex(c?.color ?: "#78909C"))
+        Column(Modifier.weight(1f)) {
+            Text(e.storeName.ifBlank { "Manual expense" }, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+            Text(subtitle, fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+        }
+        if (thumb != null && thumb.isNotEmpty()) Box(Modifier.clip(RoundedCornerShape(8.dp))) { Thumb(thumb, 36.dp) }
+        Text("-" + rm(e.amount), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Red)
+    }
+}
 
 @Composable fun ExpensesScreen(vm: AppVM) {
     var tab by remember { mutableStateOf(0) }
     var showNew by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<ExpenseEntity?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab) {
-            Tab(tab == 0, { tab = 0 }, text = { Text("Analytics") })
-            Tab(tab == 1, { tab = 1 }, text = { Text("History") })
-        }
+    Column(Modifier.fillMaxSize().background(Bg)) {
+        Pad { Spacer(Modifier.height(10.dp)); Segmented(listOf("Overview", "History"), tab, Modifier.fillMaxWidth(), equal = true) { tab = it }; Spacer(Modifier.height(4.dp)) }
         Box(Modifier.weight(1f)) {
-            if (tab == 0) Analytics(vm) else History(vm) { editing = it }
-            FloatingActionButton({ showNew = true }, Modifier.align(Alignment.BottomEnd).padding(16.dp)) { Icon(Icons.Default.Add, "Add expense") }
+            if (tab == 0) Overview(vm) else History(vm) { editing = it }
+            FloatingActionButton({ showNew = true }, Modifier.align(Alignment.BottomEnd).padding(16.dp), containerColor = Brand, contentColor = Color.White) {
+                Icon(Icons.Default.Add, "Add expense")
+            }
         }
     }
-    if (showNew || editing != null) ManualDialog(vm, editing) { showNew = false; editing = null }
+    if (showNew || vm.addManual || editing != null) ManualDialog(vm, editing) { showNew = false; vm.addManual = false; editing = null }
 }
 
-@Composable fun Analytics(vm: AppVM) {
+@Composable fun Overview(vm: AppVM) {
     val exp by vm.expenses.collectAsState(); val items by vm.items.collectAsState(); val cats by vm.categories.collectAsState()
     var mode by remember { mutableStateOf(2) }
     val today = LocalDate.now()
@@ -42,44 +63,81 @@ import java.util.UUID
     val (from, to) = Fin.range(mode, today)
     val inRange = exp.filter { it.date in from.toEpochDay()..to.toEpochDay() }
     val cs = remember(exp, items, mode) { Fin.catSpend(exp, items, from.toEpochDay(), to.toEpochDay()) }
-    val names = cats.associate { it.categoryId to it.name }
     val noun = listOf("day", "week", "month", "year")[mode]
     val cur = vals.last(); val prev = vals.getOrElse(vals.size - 2) { 0.0 }
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val colorOf = cats.associate { it.categoryId to hex(it.color) }; val names = cats.associate { it.categoryId to it.name }
+    val sorted = cs.entries.sortedByDescending { it.value }
+    val total = sorted.sumOf { it.value }.coerceAtLeast(0.01)
+    val counts = remember(items, inRange) {
+        val ids = inRange.map { it.receiptId }.filter { it.isNotEmpty() }.toSet()
+        items.filter { it.receiptId in ids }.groupingBy { it.categoryId }.eachCount()
+    }
+    val stores = inRange.groupBy { it.storeName.ifBlank { "Unknown" } }.mapValues { e -> e.value.sumOf { it.amount } }.entries.sortedByDescending { it.value }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 6.dp, 12.dp, 88.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { Segmented(listOf("Day", "Week", "Month", "Year"), mode, Modifier.fillMaxWidth(), equal = true) { mode = it } }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Daily", "Weekly", "Monthly", "Yearly").forEachIndexed { i, n -> FilterChip(mode == i, { mode = i }, { Text(n) }) }
-            }
-        }
-        item { Panel { BarChart(labels, vals, Modifier.fillMaxWidth().height(150.dp)) } }
-        item {
-            val diff = cur - prev
-            Text("This $noun ${rm(cur)} vs previous $noun ${rm(prev)}: " + (if (prev > 0) "${if (diff >= 0) "+" else "-"}${rm(kotlin.math.abs(diff))} (${Math.round(diff / prev * 100)}%)" else "no earlier data to compare"), fontWeight = FontWeight.Bold)
-        }
-        item {
-            if (inRange.isEmpty()) Text("No transactions in this $noun.") else {
-                Text("Trips: ${inRange.size}   Average trip: ${rm(inRange.sumOf { it.amount } / inRange.size)}")
-                Text("Highest: ${rm(inRange.maxOf { it.amount })}   Lowest: ${rm(inRange.minOf { it.amount })}")
-            }
-        }
-        item {
-            val sorted = cs.entries.sortedByDescending { it.value }
-            val colorOf = cats.associate { it.categoryId to hex(it.color) }
             Panel {
-                Text("By category (this $noun)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                if (sorted.isEmpty()) Text("No spending in this $noun.", fontSize = 12.sp)
-                else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Donut(sorted.map { (colorOf[it.key] ?: Color.Gray) to it.value }, 120.dp) { Text(rm(sorted.sumOf { it.value }), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        sorted.take(6).forEach { Legend(colorOf[it.key] ?: Color.Gray, names[it.key] ?: it.key, rm(it.value)) }
-                    }
+                Text("Total this $noun", fontSize = 12.sp, color = Color.Gray)
+                Text(rm(cur), fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                val diff = cur - prev
+                Text(if (prev > 0) "${if (diff >= 0) "▲" else "▼"} ${Math.abs(Math.round(diff / prev * 100))}% (${rm(abs(diff))}) vs previous $noun" else "No earlier $noun to compare",
+                    fontSize = 12.sp, color = if (prev > 0 && diff >= 0) Red else Green, fontWeight = FontWeight.Medium)
+                if (inRange.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MiniStat("Trips", "${inRange.size}", Modifier.weight(1f))
+                    MiniStat("Average", rm(inRange.sumOf { it.amount } / inRange.size), Modifier.weight(1f))
+                    MiniStat("Highest", rm(inRange.maxOf { it.amount }), Modifier.weight(1f))
                 }
             }
         }
-        item { Section("By supermarket (this $noun)") }
-        val stores = inRange.groupBy { it.storeName.ifBlank { "Unknown" } }.mapValues { e -> e.value.sumOf { it.amount } }.entries.sortedByDescending { it.value }
-        items(stores.size) { i -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(stores[i].key); Text(rm(stores[i].value)) } }
-        item { Spacer(Modifier.height(72.dp)) }
+        item {
+            Panel {
+                Text("Spending trend", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (mode == 2) AreaChart(vals, labels, Modifier.fillMaxWidth().height(170.dp)) else BarChart(labels, vals, Modifier.fillMaxWidth().height(170.dp))
+            }
+        }
+        item {
+            Panel {
+                Text("Category summary", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (sorted.isEmpty()) Text("No spending in this $noun.", fontSize = 12.sp, color = Color.Gray)
+                else {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Donut(sorted.map { (colorOf[it.key] ?: Color.Gray) to it.value }, 150.dp) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Amount", fontSize = 10.sp, color = Color.Gray); Text(rm(total), fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                    sorted.take(6).forEach { Legend(colorOf[it.key] ?: Color.Gray, names[it.key] ?: it.key, "${(it.value / total * 100).roundToInt()}%") }
+                }
+            }
+        }
+        item {
+            Panel {
+                Text("Categories", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                sorted.forEach { e ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        IconTile(catEmoji(e.key), colorOf[e.key] ?: Color.Gray)
+                        Column(Modifier.weight(1f)) {
+                            Text(names[e.key] ?: e.key, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("${counts[e.key] ?: 0} items", fontSize = 11.sp, color = Color.Gray)
+                        }
+                        Text(rm(e.value), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (sorted.isEmpty()) Text("Nothing yet.", fontSize = 12.sp, color = Color.Gray)
+            }
+        }
+        item {
+            Panel {
+                Text("By supermarket", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                val mx = (stores.firstOrNull()?.value ?: 1.0).coerceAtLeast(0.01)
+                stores.forEach { s ->
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(s.key, fontSize = 13.sp); Text(rm(s.value), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                        Bar((s.value / mx).toFloat(), Brand, Modifier.height(5.dp))
+                    }
+                }
+                if (stores.isEmpty()) Text("Nothing yet.", fontSize = 12.sp, color = Color.Gray)
+            }
+        }
     }
 }
 
@@ -98,33 +156,43 @@ import java.util.UUID
             (fMin.num()?.let { e.amount >= it } ?: true) && (fMax.num()?.let { e.amount <= it } ?: true) &&
             (fCat.isEmpty() || e.categoryId == fCat || items.any { it.receiptId == e.receiptId && it.categoryId == fCat })
     }
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val grouped = list.groupBy { it.date }.entries.sortedByDescending { it.key }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 6.dp, 12.dp, 88.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item {
-            OutlinedButton({ show = !show }, Modifier.fillMaxWidth()) { Text(if (show) "Hide filters" else "Filters") }
-            if (show) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Pick("Store", fStore, listOf("" to "All") + exp.map { it.storeName }.filter { it.isNotBlank() }.distinct().sorted().map { it to it }, { fStore = it })
-                Pick("Category", fCat, listOf("" to "All") + cats.map { it.categoryId to it.name }, { fCat = it })
-                Pick("Payment", fPay, listOf("" to "All") + PAYMENTS.map { it to it }, { fPay = it })
-                Pick("Month", fMonth, listOf("" to "All") + exp.map { day(it.date).toString().take(7) }.distinct().sortedDescending().map { it to it }, { fMonth = it })
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Field("From yyyy-MM-dd", fFrom, { fFrom = it }, Modifier.weight(1f)); Field("To yyyy-MM-dd", fTo, { fTo = it }, Modifier.weight(1f)) }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Field("Min RM", fMin, { fMin = it }, Modifier.weight(1f), number = true); Field("Max RM", fMax, { fMax = it }, Modifier.weight(1f), number = true) }
-            }
-            Text("${list.size} transaction(s), total ${rm(list.sumOf { it.amount })}", fontWeight = FontWeight.Bold)
-        }
-        items(list.size) { i ->
-            val e = list[i]; val r = rmap[e.receiptId]
-            Card(Modifier.fillMaxWidth().clickable { open = e }) {
-                Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (r != null && r.imagePath.isNotEmpty()) Thumb(r.imagePath)
-                    Column(Modifier.weight(1f)) {
-                        Text(e.storeName.ifBlank { "Manual expense" }, fontWeight = FontWeight.Bold)
-                        Text("${day(e.date)} · ${e.paymentMethod} · ${if (e.type == "RECEIPT") "${counts[e.receiptId] ?: 0} items" else "manual"}")
-                    }
-                    Text(rm(e.amount), fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${list.size} transaction(s) · ${rm(list.sumOf { it.amount })}", Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    FilterChip(show, { show = !show }, { Text("Filters", fontSize = 12.sp) })
+                }
+                if (show) Panel {
+                    Pick("Store", fStore, listOf("" to "All") + exp.map { it.storeName }.filter { it.isNotBlank() }.distinct().sorted().map { it to it }, { fStore = it })
+                    Pick("Category", fCat, listOf("" to "All") + cats.map { it.categoryId to it.name }, { fCat = it })
+                    Pick("Payment", fPay, listOf("" to "All") + PAYMENTS.map { it to it }, { fPay = it })
+                    Pick("Month", fMonth, listOf("" to "All") + exp.map { day(it.date).toString().take(7) }.distinct().sortedDescending().map { it to it }, { fMonth = it })
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Field("From yyyy-MM-dd", fFrom, { fFrom = it }, Modifier.weight(1f)); Field("To yyyy-MM-dd", fTo, { fTo = it }, Modifier.weight(1f)) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Field("Min RM", fMin, { fMin = it }, Modifier.weight(1f), number = true); Field("Max RM", fMax, { fMax = it }, Modifier.weight(1f), number = true) }
                 }
             }
         }
-        item { Spacer(Modifier.height(72.dp)) }
+        if (list.isEmpty()) item { Text("No transactions match.", color = Color.Gray, fontSize = 13.sp) }
+        grouped.forEach { (dayL, es) ->
+            item(key = "h$dayL") {
+                val d = day(dayL)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp).background(Color.White, RoundedCornerShape(14.dp)).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("%02d".format(d.dayOfMonth), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Brand)
+                    Column(Modifier.weight(1f)) {
+                        Text(d.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("${d.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${d.year}", fontSize = 12.sp, color = Color.Gray)
+                    }
+                    Text("-" + rm(es.sumOf { it.amount }), fontWeight = FontWeight.Bold, color = Red)
+                }
+            }
+            items(es.size, key = { es[it].expenseId }) { i ->
+                val e = es[i]; val r = rmap[e.receiptId]
+                ExpenseRow(e, cats, r?.imagePath, "${e.paymentMethod} · " + (if (e.type == "RECEIPT") "${counts[e.receiptId] ?: 0} items" else "manual")) { open = e }
+            }
+        }
     }
     open?.let { e ->
         val its = items.filter { it.receiptId == e.receiptId && e.receiptId.isNotEmpty() }

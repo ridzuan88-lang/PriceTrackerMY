@@ -24,7 +24,6 @@ import java.util.UUID
     var th by remember(st["alert_thresholds"]) { mutableStateOf(st["alert_thresholds"] ?: "50,75,90,100") }
     var newCat by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        item { Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("App version ${vm.versionText}", Modifier.weight(1f))

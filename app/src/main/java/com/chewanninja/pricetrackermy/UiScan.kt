@@ -34,7 +34,6 @@ import java.time.LocalDate
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? -> if (uri != null) vm.processUri(uri, false) }
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Scan receipt", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Lay the receipt flat in good light with the whole receipt in view. Text is read on your phone - no internet needed for the OCR.")
         Button(onClick = {
             val opts = GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(1)
@@ -56,7 +55,6 @@ import java.time.LocalDate
     var dt by remember(d.receiptId) { mutableStateOf(d.date?.toString() ?: "") }
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Text(if (d.isEdit) "Edit receipt" else "Review receipt", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text("Orange fields had low OCR confidence. Check them against the receipt.")
             if (d.imagePath.isNotEmpty()) Thumb(d.imagePath, 140.dp, 4)
         }

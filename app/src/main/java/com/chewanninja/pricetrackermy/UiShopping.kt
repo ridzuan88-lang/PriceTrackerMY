@@ -21,7 +21,7 @@ import java.util.UUID
     val list = lists.firstOrNull { it.listId == id }
     if (list == null) {
         LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { Text("Shopping lists", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Field("New list name", newName, { newName = it }, Modifier.weight(1f))
                     Button({ if (newName.isNotBlank()) { vm.addList(newName.trim()); newName = "" } }) { Text("Add") } } }

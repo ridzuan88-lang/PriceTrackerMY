@@ -31,8 +31,7 @@ import androidx.compose.ui.unit.dp
             }
         }
     } else LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        item { Text("Price tracker", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Field("Search product", q, { q = it }) }
+        item { Field("Search product", q, { q = it }) }
         if (shown.isEmpty()) item { Text("No price history yet. Prices are recorded from every confirmed receipt.") }
         items(shown.size) { i ->
             val l = shown[i]; val last = l.last(); val prev = l.getOrNull(l.size - 2)
